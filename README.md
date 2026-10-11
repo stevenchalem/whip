@@ -153,6 +153,11 @@ The table shows hits out of 20 disturbed swings at each height.
 - **This is one optimizer run per arm.** Some differences at individual
   heights will reflect how the search went rather than a hard limit of the arm.
 
+In the page, the **Drives** card switches between the three arms. A locked joint
+is drawn as a rigid pin, and each two-joint arm uses its own aim table, which
+`tools/embed-tables.js` copies from `results/two-joint` into `sim.js`. The
+in-page hit-rate test runs on whichever arm is selected.
+
 To reproduce one variant (shown here for the elbow):
 
 ```

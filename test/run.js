@@ -59,4 +59,13 @@ for (const h of [0.5, 0.9, 1.2, 1.4, 2.0]) {
   console.log(`aimed strike, card at ${h.toFixed(2)} m: ${r.hit ? `hit at ${r.speed.toFixed(0)} m/s` : `miss by ${(r.miss * 100).toFixed(1)} cm`}`);
   assert(r.hit, `aimed strike should hit a card at ${h} m`);
 }
+// two-joint arms use their own tables (results/two-joint): nominal hits at heights they handle
+const { aimTable } = require('../sim.js');
+for (const [arm, heights] of [['elbow', [0.9, 1.4, 1.75]], ['wrist', [0.5, 1.5, 2.0]]]) {
+  for (const h of heights) {
+    const r = evaluate(aimFor(h, aimTable(arm)), h, { locked: arm });
+    console.log(`${arm} locked, card at ${h.toFixed(2)} m: ${r.hit ? `hit at ${r.speed.toFixed(0)} m/s` : `miss by ${(r.miss * 100).toFixed(1)} cm`}`);
+    assert(r.hit, `${arm}-locked aimed strike should hit a card at ${h} m`);
+  }
+}
 console.log('ok');

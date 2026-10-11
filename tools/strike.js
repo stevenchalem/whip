@@ -2,24 +2,27 @@
 const { WhipSim, makeStrikeProfile, strikeTrial } = require('../sim.js');
 
 const CARD_X = 2.6;
-let settled = null;
+const settled = new Map(); // one settled sim per arm
 
 // WHIP_LOCK=elbow|wrist runs everything with that joint held rigid (a two-joint arm).
 const LOCKS = { elbow: 1, wrist: 2 };
 const SIM_OPTS = process.env.WHIP_LOCK ? { locked: LOCKS[process.env.WHIP_LOCK], lockedAngle: 0 } : {};
 if (process.env.WHIP_LOCK && SIM_OPTS.locked == null) throw new Error(`WHIP_LOCK must be one of ${Object.keys(LOCKS)}`);
 
-// Run one strike at a card centred at `height`. `trial` = { seed, trigger }:
-// a seed applies random disturbances; no seed is the nominal case.
+// Run one strike at a card centred at `height`. `trial` = { seed, trigger, locked }:
+// a seed applies random disturbances (no seed is the nominal case); `locked`
+// ('elbow' or 'wrist') overrides WHIP_LOCK for this call.
 function evaluate(aim, height, trial = {}) {
-  if (!settled) {
-    settled = new WhipSim({
+  const opts = trial.locked ? { locked: LOCKS[trial.locked], lockedAngle: 0 } : SIM_OPTS;
+  const key = String(opts.locked);
+  if (!settled.has(key)) {
+    settled.set(key, new WhipSim({
       profile: makeStrikeProfile({ windup: [115, 20, 35], end: [10, -15, -45], strikeTime: 0.2, hold: 0.45 }),
       target: { x: CARD_X, y: height },
-      ...SIM_OPTS,
-    });
+      ...opts,
+    }));
   }
-  const gen = strikeTrial(settled, aim, height, trial, Infinity);
+  const gen = strikeTrial(settled.get(key), aim, height, trial, Infinity);
   let r = gen.next();
   while (!r.done) r = gen.next();
   return r.value;

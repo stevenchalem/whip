@@ -202,7 +202,7 @@
 <div class="wrap">
   <header>
     <h1>Whip Rig</h1>
-    <p>A three-axis motor arm swings a 2.2 m tapered whip, either to crack it (tip past the speed of sound) or to strike a hanging card.</p>
+    <p>A motor arm with three joints, or two, swings a 2.2 m tapered whip, either to crack it (tip past the speed of sound) or to strike a hanging card.</p>
     <span class="status" id="status" data-state="idle">Holding</span>
   </header>
 
@@ -284,10 +284,16 @@
 
       <section class="card">
         <h2>Drives</h2>
+        <div class="seg" id="arm" role="radiogroup" aria-label="Driven joints">
+          <input type="radio" name="arm" id="arm-full" value="full" checked><label for="arm-full">3 joints</label>
+          <input type="radio" name="arm" id="arm-elbow" value="elbow"><label for="arm-elbow">Shoulder + wrist</label>
+          <input type="radio" name="arm" id="arm-wrist" value="wrist"><label for="arm-wrist">Shoulder + elbow</label>
+        </div>
         <table class="joints">
           <thead><tr><th>Axis</th><th>Angle</th><th>Speed</th><th>Torque</th></tr></thead>
           <tbody id="joints"></tbody>
         </table>
+        <p class="note" id="armnote" hidden></p>
       </section>
 
       <section class="card">
@@ -328,13 +334,18 @@
 <script>
 (() => {
   'use strict';
-  const { WhipSim: Sim, PROFILES, DEFAULTS, SPEED_OF_SOUND, makeStrikeProfile, aimFor, strikeTrial } = window.WhipSim;
+  const { WhipSim: Sim, PROFILES, DEFAULTS, SPEED_OF_SOUND, makeStrikeProfile, aimFor, aimTable, strikeTrial } = window.WhipSim;
   const AIM_TABLE = window.WhipSim.AIM_TABLE();
+  const LOCKED = { full: null, elbow: 1, wrist: 2 };
+  const ARM_NOTES = {
+    elbow: 'Elbow locked straight. The card strike uses its own aim table (85% hits in testing, slower impacts). The crack programs were designed for three joints and no longer crack.',
+    wrist: 'Wrist locked in line with the forearm. The card strike uses its own aim table (62% hits in testing; misses at 0.9 and 1.2 m, cracks at the card around 1.5–1.75 m). The crack programs were designed for three joints: the overhead crack still cracks, the forward flick does not.',
+  };
   const $ = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const ui = {
-    profile: 'aimed', cardHeight: 1.2, trigger: 'extended', speed: 1, torque: 1, whipLength: 2.2, tipDiameter: 1.5, drag: 1,
+    profile: 'aimed', arm: 'full', cardHeight: 1.2, trigger: 'extended', speed: 1, torque: 1, whipLength: 2.2, tipDiameter: 1.5, drag: 1,
     timeScale: 0.25, playing: true, sound: false,
   };
 
@@ -344,7 +355,9 @@
 
   function build() {
     sim = new Sim({
-      profile: aimed() ? makeStrikeProfile(aimFor(ui.cardHeight)) : ui.profile,
+      profile: aimed() ? makeStrikeProfile(aimFor(ui.cardHeight, aimTable(ui.arm))) : ui.profile,
+      locked: LOCKED[ui.arm],
+      lockedAngle: 0,
       target: aimed() ? { x: AIM_TABLE.x, y: ui.cardHeight } : null,
       trigger: ui.trigger,
       speed: ui.speed,
@@ -363,6 +376,8 @@
     hitFlash = 0;
     hitSeen = null;
     $('targetcard').hidden = !aimed();
+    $('armnote').hidden = ui.arm === 'full';
+    $('armnote').textContent = ARM_NOTES[ui.arm] || '';
     buildPhaseTrack();
   }
 
@@ -586,6 +601,14 @@
     const radii = [0.09, 0.075, 0.055];
     for (let j = 0; j < 3; j++) {
       const cx = X(J[j][0]), cy = Y(J[j][1]), r = radii[j] * k;
+      if (j === P.locked) {
+        // rigid joint: a plate and two bolts, no motor
+        ctx.fillStyle = colors.steel;
+        ctx.beginPath(); ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = colors.panel;
+        for (const s of [-1, 1]) { ctx.beginPath(); ctx.arc(cx + s * r * 0.3, cy, Math.max(1.2, r * 0.14), 0, Math.PI * 2); ctx.fill(); }
+        continue;
+      }
       ctx.fillStyle = colors.panel;
       ctx.strokeStyle = colors.ink;
       ctx.lineWidth = 1.5;
@@ -744,6 +767,13 @@
 
     for (let j = 0; j < 3; j++) {
       const r = jointRows[j];
+      if (j === sim.params.locked) {
+        r.angle.textContent = fmt(sim.q[j] * 180 / Math.PI) + '°';
+        r.speed.textContent = 'locked';
+        r.torque.textContent = '–';
+        r.bar.style.width = '0%';
+        continue;
+      }
       r.angle.textContent = fmt(sim.q[j] * 180 / Math.PI) + '°';
       r.speed.textContent = fmt(sim.qd[j], 1) + ' rad/s';
       r.torque.textContent = fmt(sim.tau[j]) + ' N·m';
@@ -810,9 +840,10 @@
   let trialRun = 0;
   function runTrials() {
     const run = ++trialRun;
-    const height = ui.cardHeight, aim = aimFor(height), n = 20;
+    const height = ui.cardHeight, aim = aimFor(height, aimTable(ui.arm)), n = 20;
     const modes = [['extended', 'When unrolled'], ['timed', 'Fixed clock']];
-    const base = new Sim({ profile: makeStrikeProfile(aim), target: { x: AIM_TABLE.x, y: height } });
+    const base = new Sim({ profile: makeStrikeProfile(aim), target: { x: AIM_TABLE.x, y: height }, locked: LOCKED[ui.arm], lockedAngle: 0 });
+    const armName = { full: 'three joints', elbow: 'shoulder + wrist', wrist: 'shoulder + elbow' }[ui.arm];
     const jobs = [];
     for (const [mode] of modes) for (let i = 0; i < n; i++) jobs.push({ mode, seed: 101 + i });
     const results = { extended: [], timed: [] };
@@ -820,7 +851,7 @@
     $('trialOut').hidden = false;
     $('trialTable').hidden = true;
     $('trialBtn').disabled = true;
-    $('trialNote').textContent = `Card at ${height.toFixed(2)} m. Running…`;
+    $('trialNote').textContent = `Card at ${height.toFixed(2)} m, ${armName}. Running…`;
     const tick = () => {
       if (run !== trialRun) return;
       const t0 = performance.now();
@@ -844,7 +875,7 @@
         body.appendChild(tr);
       }
       $('trialTable').hidden = false;
-      $('trialNote').textContent = `Card at ${height.toFixed(2)} m. Typical miss and impact are medians.`;
+      $('trialNote').textContent = `Card at ${height.toFixed(2)} m, ${armName}. Typical miss and impact are medians.`;
       $('trialBtn').disabled = false;
     };
     setTimeout(tick, 30);
@@ -889,6 +920,7 @@
   $('reset').addEventListener('click', build);
   $('trigger').addEventListener('change', (e) => { ui.trigger = e.target.value; sim.setParams({ trigger: ui.trigger }); });
   $('trialBtn').addEventListener('click', runTrials);
+  $('arm').addEventListener('change', (e) => { ui.arm = e.target.value; build(); });
   $('sound').addEventListener('click', () => {
     ui.sound = !ui.sound;
     if (ui.sound && !actx) {
