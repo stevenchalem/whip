@@ -74,7 +74,49 @@ starting motion, using different random seeds from the optimizer. The page's
 **Test 20 disturbed swings per trigger** button runs the same test for the
 current card height.
 
-RESULTS_PLACEHOLDER
+Results with the current table (`node tools/trials.js 20`):
+
+| Card height | Hits out of 20 | Typical impact speed |
+|---|---|---|
+| 0.50–1.20 m | 20 at every height tested | 42–82 m/s |
+| 1.25 m | 18 | 42 m/s |
+| 1.40 m | 20 | 50 m/s |
+| 1.50 m | 18 | 56 m/s |
+| 1.60 m | 16 | 72 m/s |
+| 1.75 m | 13 | 52 m/s |
+| 1.90 m | 11 | 72 m/s |
+| 2.00 m | 19 | 91 m/s |
+
+That's 90% across the 13 heights tested, including heights between table rows.
+
+Some things to know about these results:
+
+- **Cards around the shoulder axis are hardest.** That's 1.75–1.9 m, since the
+  shoulder is at 1.7 m. At 1.9 m the nominal strike misses by 3 cm.
+- **The table uses two strike styles.** Below 1.45 m it uses an overhead strike
+  that drops the tip onto the card. From 1.5 m up it uses a flatter strike
+  found by a second sweep run downward from 2 m with a wider search. The table
+  switches between them only once, because swapping back and forth made the
+  heights in between miss.
+- **Hits are mostly slow, at 40–90 m/s.** The optimizer favours a reliable hit
+  over a fast one. One solution it found at 0.75 m cracked at the card at about
+  450 m/s, but it was robust only in a narrow height band, so it isn't in the
+  table.
+- **The two triggers give identical results here.** The wind-up always leaves
+  the whip stretched out behind the rig, so the unroll trigger fires at once
+  and never needs to wait. It would only matter with a faster wind-up, a longer
+  whip, or disturbances that delay the unroll.
+
+To regenerate the table:
+
+```
+node tools/aim.js --out up.json
+node tools/aim.js --descending --out down.json
+node tools/merge-aim.js --split 1.45 up.json down.json
+```
+
+`merge-aim.js` also keeps the rows already in `sim.js` as candidates, so for a
+clean rebuild, first set `AIM_TABLE` to `null`.
 
 ## Controls
 
@@ -88,7 +130,8 @@ against the Mach 1 line.
 - `sim.js` holds the physics. It has no DOM dependencies, so it works in the browser
   (`window.WhipSim`) and in Node (`require('./sim.js')`).
 - `index.html` is the renderer, telemetry and controls.
-- `tools/aim.js` regenerates the aim table in `sim.js` (about 15 minutes on 4 cores).
+- `tools/aim.js` runs one optimizer sweep (about 15 minutes on 4 cores).
+- `tools/merge-aim.js` combines sweeps into the aim table in `sim.js`.
 - `tools/trials.js` runs the hit-rate trials (`node tools/trials.js [n]`).
 - `test/run.js` is a headless smoke test. It checks stability, inextensibility, that
   the strike programs crack and that the slow swing doesn't. Run it with `npm test`.

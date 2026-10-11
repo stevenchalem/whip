@@ -51,4 +51,12 @@ for (const opts of cases) {
 assert(results['{"profile":"overhead"}'].cracks.length >= 1, 'overhead profile should crack');
 assert(results['{"profile":"flick"}'].cracks.length >= 1, 'flick profile should crack');
 assert.strictEqual(results['{"profile":"gentle"}'].cracks.length, 0, 'slow swing should not crack');
+// aimed strike: the nominal strike from the aim table hits the card at these heights
+const { evaluate } = require('../tools/strike.js');
+const { aimFor } = require('../sim.js');
+for (const h of [0.5, 0.9, 1.2, 1.4, 2.0]) {
+  const r = evaluate(aimFor(h), h);
+  console.log(`aimed strike, card at ${h.toFixed(2)} m: ${r.hit ? `hit at ${r.speed.toFixed(0)} m/s` : `miss by ${(r.miss * 100).toFixed(1)} cm`}`);
+  assert(r.hit, `aimed strike should hit a card at ${h} m`);
+}
 console.log('ok');
