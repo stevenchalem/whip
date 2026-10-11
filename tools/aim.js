@@ -1,5 +1,6 @@
 // Optimise aimed-strike parameters for card heights from 0.5 to 2 m.
 //   node tools/aim.js [--descending] --out rows.json
+// Set WHIP_LOCK=elbow|wrist to optimise a two-joint arm, WHIP_WORKERS=n to limit threads.
 // writes the solved rows (with their scores) to a JSON file; tools/merge-aim.js
 // then combines sweeps into the AIM_TABLE block in sim.js.
 //
@@ -38,7 +39,7 @@ const os = require('os');
 const { rng } = require('../sim.js');
 
 // --- worker pool
-const workers = Array.from({ length: os.cpus().length }, () => new Worker(__filename));
+const workers = Array.from({ length: parseInt(process.env.WHIP_WORKERS || os.cpus().length, 10) }, () => new Worker(__filename));
 const idle = workers.slice();
 const pending = new Map();
 const queue = [];

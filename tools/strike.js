@@ -4,6 +4,11 @@ const { WhipSim, makeStrikeProfile, strikeTrial } = require('../sim.js');
 const CARD_X = 2.6;
 let settled = null;
 
+// WHIP_LOCK=elbow|wrist runs everything with that joint held rigid (a two-joint arm).
+const LOCKS = { elbow: 1, wrist: 2 };
+const SIM_OPTS = process.env.WHIP_LOCK ? { locked: LOCKS[process.env.WHIP_LOCK], lockedAngle: 0 } : {};
+if (process.env.WHIP_LOCK && SIM_OPTS.locked == null) throw new Error(`WHIP_LOCK must be one of ${Object.keys(LOCKS)}`);
+
 // Run one strike at a card centred at `height`. `trial` = { seed, trigger }:
 // a seed applies random disturbances; no seed is the nominal case.
 function evaluate(aim, height, trial = {}) {
@@ -11,6 +16,7 @@ function evaluate(aim, height, trial = {}) {
     settled = new WhipSim({
       profile: makeStrikeProfile({ windup: [115, 20, 35], end: [10, -15, -45], strikeTime: 0.2, hold: 0.45 }),
       target: { x: CARD_X, y: height },
+      ...SIM_OPTS,
     });
   }
   const gen = strikeTrial(settled, aim, height, trial, Infinity);
@@ -33,4 +39,4 @@ const toAim = (x) => ({
   hold: 0,
 });
 
-module.exports = { evaluate, CARD_X, SEEDS, score, toAim };
+module.exports = { evaluate, CARD_X, SEEDS, score, toAim, SIM_OPTS };

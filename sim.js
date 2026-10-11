@@ -104,8 +104,8 @@
   // <<< AIM_TABLE
 
   // Strike parameters for an arbitrary card height, interpolated from the table.
-  function aimFor(height) {
-    const rows = AIM_TABLE.rows;
+  function aimFor(height, table = AIM_TABLE) {
+    const rows = table.rows;
     const h = Math.min(rows[rows.length - 1].h, Math.max(rows[0].h, height));
     let i = 0;
     while (i < rows.length - 2 && h > rows[i + 1].h) i++;
@@ -198,6 +198,8 @@
     omegaMax: [30, 45, 70], // no-load speed (rad/s)
     friction: [0.5, 0.3, 0.05], // viscous joint friction (N m s)
     bandwidth: 45, // controller natural frequency (rad/s)
+    locked: null, // joint held rigid instead of driven (1 = elbow, 2 = wrist), or null
+    lockedAngle: 0, // angle of the locked joint (degrees)
     loadFilter: 0.001, // time constant of the whip→joint reaction filter (s)
 
     // whip
@@ -257,6 +259,7 @@
       // joints
       const start = sampleProfile(this.profile, 0, P.speed);
       this.q = start.q.slice();
+      if (P.locked != null) this.q[P.locked] = P.lockedAngle * DEG;
       this.qd = [0, 0, 0];
       this.tau = [0, 0, 0];
       this.tauLoad = [0, 0, 0];
@@ -365,6 +368,13 @@
       this.target = tgt;
       const wn = P.bandwidth;
       for (let j = 0; j < 3; j++) {
+        if (j === P.locked) {
+          // a rigid joint: the structure carries the load, no motor
+          this.q[j] = tgt.q[j] = P.lockedAngle * DEG;
+          this.qd[j] = tgt.qd[j] = 0;
+          this.tau[j] = 0;
+          continue;
+        }
         const I = P.inertia[j];
         const kp = I * wn * wn, kd = 2 * I * wn;
         let cmd = kp * (tgt.q[j] - this.q[j]) + kd * (tgt.qd[j] - this.qd[j]) + I * tgt.qdd[j];

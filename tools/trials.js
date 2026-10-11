@@ -1,10 +1,14 @@
 // Robustness check for the aim table: for several card heights (table rows and
 // heights in between), run disturbed strikes with each trigger and report hit
-// rates.  Usage: node tools/trials.js [trialsPerCase=20]
+// rates.  Usage: node tools/trials.js [trialsPerCase=20] [--table table.json]
+// --table uses an aim table from a file instead of the one in sim.js;
+// WHIP_LOCK=elbow|wrist runs a two-joint arm.
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
 
 const HEIGHTS = [0.5, 0.6, 0.75, 0.9, 1.0, 1.2, 1.25, 1.4, 1.5, 1.6, 1.75, 1.9, 2.0];
-const N = parseInt(process.argv[2] || '20', 10);
+const ti = process.argv.indexOf('--table');
+const TABLE = ti >= 0 ? JSON.parse(require('fs').readFileSync(process.argv[ti + 1], 'utf8')) : undefined;
+const N = parseInt(process.argv.slice(2).find((a) => /^\d+$/.test(a)) || '20', 10);
 
 if (isMainThread) {
   const os = require('os');
@@ -14,7 +18,7 @@ if (isMainThread) {
   const next = () => {
     const h = queue.shift();
     running++;
-    const w = new Worker(__filename, { workerData: { h, n: N } });
+    const w = new Worker(__filename, { workerData: { h, n: N, table: TABLE } });
     w.on('message', (r) => rows.push(r));
     w.on('error', (e) => { console.error(e); process.exitCode = 1; });
     w.on('exit', () => { running--; if (queue.length) next(); else if (!running) report(); });
@@ -36,8 +40,8 @@ if (isMainThread) {
 } else {
   const { evaluate } = require('./strike.js');
   const { aimFor } = require('../sim.js');
-  const { h, n } = workerData;
-  const aim = aimFor(h);
+  const { h, n, table } = workerData;
+  const aim = aimFor(h, table);
   const med = (xs) => (xs.length ? xs.slice().sort((a, b) => a - b)[Math.floor(xs.length / 2)] : null);
   const summary = (trigger) => {
     const rs = [];
