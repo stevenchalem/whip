@@ -1,0 +1,15 @@
+height  nominal       unrolled-trigger            fixed-clock
+0.50 m  hit 75 m/s    100% hit, miss   - cm,  71 m/s   100% hit, miss   - cm,  71 m/s
+0.60 m  hit 84 m/s    100% hit, miss   - cm,  82 m/s   100% hit, miss   - cm,  82 m/s
+0.75 m  hit 42 m/s    100% hit, miss   - cm,  42 m/s   100% hit, miss   - cm,  42 m/s
+0.90 m  hit 67 m/s    100% hit, miss   - cm,  68 m/s   100% hit, miss   - cm,  68 m/s
+1.00 m  hit 82 m/s    100% hit, miss   - cm,  81 m/s   100% hit, miss   - cm,  81 m/s
+1.20 m  hit 45 m/s    100% hit, miss   - cm,  44 m/s   100% hit, miss   - cm,  44 m/s
+1.25 m  hit 45 m/s     90% hit, miss   1 cm,  42 m/s    90% hit, miss   1 cm,  42 m/s
+1.40 m  hit 49 m/s    100% hit, miss   - cm,  50 m/s   100% hit, miss   - cm,  50 m/s
+1.50 m  hit 55 m/s     90% hit, miss   8 cm,  56 m/s    90% hit, miss   8 cm,  56 m/s
+1.60 m  hit 72 m/s     80% hit, miss   2 cm,  72 m/s    80% hit, miss   2 cm,  72 m/s
+1.75 m  hit 52 m/s     65% hit, miss   2 cm,  52 m/s    65% hit, miss   2 cm,  52 m/s
+1.90 m  miss 3 cm      55% hit, miss   5 cm,  72 m/s    55% hit, miss   5 cm,  72 m/s
+2.00 m  hit 78 m/s     95% hit, miss   8 cm,  91 m/s    95% hit, miss   8 cm,  91 m/s
+mean hit rate: unrolled-trigger  90%, fixed-clock  90%

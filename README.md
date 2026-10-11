@@ -118,6 +118,50 @@ node tools/merge-aim.js --split 1.45 up.json down.json
 `merge-aim.js` also keeps the rows already in `sim.js` as candidates, so for a
 clean rebuild, first set `AIM_TABLE` to `null`.
 
+## Two joints instead of three
+
+To see whether the third joint earns its place, the same optimization and
+trials were run with one joint locked rigid at 0°. Reach, motors and whip were
+unchanged. The tables and raw trial output are in `results/`.
+
+| Card height | 3 joints | Shoulder + wrist (elbow locked) | Shoulder + elbow (wrist locked) |
+|---|---|---|---|
+| 0.50 m | 20 | 18 | 20 |
+| 0.60 m | 20 | 15 | 14 |
+| 0.75 m | 20 | 15 | 5 |
+| 0.90 m | 20 | 20 | 0 |
+| 1.00 m | 20 | 20 | 18 |
+| 1.20 m | 20 | 20 | 0 |
+| 1.25 m | 18 | 20 | 13 |
+| 1.40 m | 20 | 20 | 10 |
+| 1.50 m | 18 | 12 | 19 |
+| 1.60 m | 16 | 17 | 10 |
+| 1.75 m | 13 | 18 | 19 |
+| 1.90 m | 11 | 12 | 15 |
+| 2.00 m | 19 | 14 | 19 |
+| **Mean hit rate** | **90%** | **85%** | **62%** |
+
+The table shows hits out of 20 disturbed swings at each height.
+
+- **Shoulder + wrist comes close to three joints.** It does as well or better
+  from 0.9 to 1.4 m and at 1.75 m. But its hits there are slow (20–27 m/s,
+  against 44–82 m/s with three joints), and it is weaker at the extremes.
+- **Shoulder + elbow is the weakest overall.** It completely fails at 0.9 and
+  1.2 m, where even the nominal strike misses. However, it found strikes from
+  1.5 to 1.75 m that hit at 250–380 m/s, cracking at or near the card, with
+  95% hits at 1.5 and 1.75 m.
+- **This is one optimizer run per arm.** Some differences at individual
+  heights will reflect how the search went rather than a hard limit of the arm.
+
+To reproduce one variant (shown here for the elbow):
+
+```
+WHIP_LOCK=elbow node tools/aim.js --out up.json
+WHIP_LOCK=elbow node tools/aim.js --descending --out down.json
+WHIP_LOCK=elbow node tools/merge-aim.js --split 1.45 --out table.json up.json down.json
+WHIP_LOCK=elbow node tools/trials.js 20 --table table.json
+```
+
 ## Controls
 
 You can change swing tempo, motor stall torque, whip length, tip diameter
