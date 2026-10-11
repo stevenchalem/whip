@@ -1,0 +1,746 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Whip Rig Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: instrument bench. Stage canvas + strip chart on the left, telemetry and drive controls in a rack on the right; stacks on phones. */
+  :root {
+    --bg: #e9edf0;
+    --panel: #f8fafb;
+    --ink: #17252e;
+    --muted: #5a6a74;
+    --line: #c5cfd5;
+    --grid: #dbe2e6;
+    --accent: #1d5bb8;
+    --accent-soft: #d5e2f5;
+    --mach: #c94a0c;
+    --mach-soft: #f8dfcf;
+    --ok: #2f7d4f;
+    --whip: #3b2b20;
+    --steel: #6d7d87;
+    --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-data: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --r: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #11171b; --panel: #172026; --ink: #dbe4ea; --muted: #8c9ca6; --line: #2a3740; --grid: #1f2a31;
+      --accent: #6fa6ff; --accent-soft: #1d2f4a; --mach: #ff8b45; --mach-soft: #3d2416; --ok: #5fcf8e;
+      --whip: #d9c2a8; --steel: #93a4ae; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #11171b; --panel: #172026; --ink: #dbe4ea; --muted: #8c9ca6; --line: #2a3740; --grid: #1f2a31;
+    --accent: #6fa6ff; --accent-soft: #1d2f4a; --mach: #ff8b45; --mach-soft: #3d2416; --ok: #5fcf8e;
+    --whip: #d9c2a8; --steel: #93a4ae; color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.45 var(--font-body);
+    padding-inline: 16px;
+    padding-block: 14px 24px;
+  }
+  .wrap { max-width: 1280px; margin: 0 auto; display: grid; gap: 14px; }
+
+  header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; }
+  h1 {
+    margin: 0;
+    font: 700 1.9rem/1 var(--font-display);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    text-wrap: balance;
+  }
+  header p { margin: 0; color: var(--muted); max-width: 62ch; min-width: 0; }
+  .status {
+    margin-left: auto;
+    font: 600 0.78rem/1 var(--font-data);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 6px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    background: var(--panel);
+    white-space: nowrap;
+  }
+  .status[data-state="sub"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .status[data-state="super"] { color: var(--mach); border-color: var(--mach); background: var(--mach-soft); }
+
+  .bench { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
+  @media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+
+  .stage-col { display: grid; gap: 10px; min-width: 0; }
+  .stage {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    overflow: hidden;
+    aspect-ratio: 16 / 10;
+    max-width: 100%;
+  }
+  .stage canvas, .chart canvas { display: block; width: 100%; height: 100%; }
+  .stage .overlay {
+    position: absolute; left: 12px; top: 10px;
+    font: 500 0.78rem/1.3 var(--font-data);
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .chart {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    height: 150px;
+  }
+
+  .transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button, .seg label {
+    font: 500 0.86rem/1 var(--font-body);
+    color: var(--ink);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 8px 12px;
+    cursor: pointer;
+  }
+  button:hover, .seg label:hover { border-color: var(--accent); }
+  button:focus-visible, .seg input:focus-visible + label, input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); min-width: 84px; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+  .seg input { position: absolute; opacity: 0; pointer-events: none; }
+  .seg input:checked + label { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .transport .label { font: 600 0.72rem/1 var(--font-body); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .spacer { flex: 1; }
+
+  .rack { display: grid; gap: 12px; min-width: 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 10px; }
+  .card h2 {
+    margin: 0;
+    font: 700 0.95rem/1 var(--font-display);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .readout { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 4px 12px; }
+  .big { font: 600 2.6rem/1 var(--font-data); font-variant-numeric: tabular-nums; }
+  .big small { font-size: 0.95rem; color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .mach { font: 600 1.1rem/1 var(--font-data); font-variant-numeric: tabular-nums; color: var(--accent); text-align: right; }
+  .mach.super { color: var(--mach); }
+  .machbar { grid-column: 1 / -1; position: relative; height: 8px; border-radius: 4px; background: var(--grid); overflow: hidden; }
+  .machbar i { position: absolute; inset: 0 auto 0 0; width: 0; background: var(--accent); border-radius: 4px; }
+  .machbar i.super { background: var(--mach); }
+  .machbar b { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--ink); left: 50%; }
+
+  dl.kv { margin: 0; display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; }
+  dl.kv dt { color: var(--muted); }
+  dl.kv dd { margin: 0; font: 500 0.92rem/1.3 var(--font-data); font-variant-numeric: tabular-nums; text-align: right; }
+
+  .phase { display: grid; gap: 6px; }
+  .phase-track { display: flex; height: 22px; border-radius: 4px; overflow: hidden; border: 1px solid var(--line); position: relative; }
+  .phase-track span {
+    flex: var(--w) 1 0; min-width: 0;
+    font: 500 0.66rem/20px var(--font-body);
+    color: var(--muted);
+    padding-inline: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border-right: 1px solid var(--line);
+  }
+  .phase-track span:last-of-type { border-right: 0; }
+  .phase-track span.on { background: var(--accent-soft); color: var(--accent); }
+  .phase-track .head { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--accent); left: 0; }
+
+  table.joints { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.joints th { text-align: left; font: 600 0.7rem/1 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; }
+  table.joints th:not(:first-child), table.joints td:not(:first-child) { text-align: right; }
+  table.joints td { padding: 4px 0; font: 500 0.86rem/1.2 var(--font-data); }
+  table.joints td:first-child { font-family: var(--font-body); }
+  .tbar { display: block; height: 4px; margin-top: 4px; border-radius: 2px; background: var(--grid); overflow: hidden; }
+  .tbar i { display: block; height: 100%; width: 0; background: var(--accent); }
+  .tbar i.sat { background: var(--mach); }
+
+  .ctl { display: grid; gap: 4px; }
+  .ctl .row { display: flex; justify-content: space-between; gap: 8px; }
+  .ctl label { color: var(--muted); }
+  .ctl output { font: 500 0.86rem/1.3 var(--font-data); font-variant-numeric: tabular-nums; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .note { margin: 0; color: var(--muted); font-size: 0.8rem; }
+
+  footer { color: var(--muted); font-size: 0.82rem; max-width: 90ch; }
+  footer p { margin: 0 0 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Whip Rig</h1>
+    <p>A three-axis motor arm cracks a 2.2 m tapered whip. The crack is the tip passing the speed of sound.</p>
+    <span class="status" id="status" data-state="idle">Holding</span>
+  </header>
+
+  <div class="bench">
+    <div class="stage-col">
+      <div class="transport">
+        <button class="primary" id="play" type="button">Pause</button>
+        <button id="reset" type="button">Restart</button>
+        <span class="label">Time</span>
+        <div class="seg" id="timescale" role="radiogroup" aria-label="Playback speed">
+          <input type="radio" name="ts" id="ts1" value="1"><label for="ts1">1×</label>
+          <input type="radio" name="ts" id="ts4" value="0.25" checked><label for="ts4">¼×</label>
+          <input type="radio" name="ts" id="ts20" value="0.05"><label for="ts20">1/20×</label>
+          <input type="radio" name="ts" id="ts100" value="0.01"><label for="ts100">1/100×</label>
+        </div>
+        <span class="spacer"></span>
+        <button id="sound" type="button" aria-pressed="false">Sound off</button>
+      </div>
+      <div class="stage"><canvas id="stage" aria-label="Side view of the whip-cracking arm"></canvas><div class="overlay" id="overlay"></div></div>
+      <div class="chart"><canvas id="chart" aria-label="Tip speed over the last four seconds"></canvas></div>
+    </div>
+
+    <div class="rack">
+      <section class="card">
+        <h2>Tip speed</h2>
+        <div class="readout">
+          <div class="big" id="tip">0<small>m/s</small></div>
+          <div class="mach" id="mach">Mach 0.00</div>
+          <div class="machbar" title="Mach 0 to 2; the mark is Mach 1"><i id="machfill"></i><b></b></div>
+        </div>
+        <dl class="kv">
+          <dt>Peak this cycle</dt><dd id="cyclepeak">–</dd>
+          <dt>Peak this run</dt><dd id="peak">–</dd>
+          <dt>Cracks</dt><dd id="cracks">0</dd>
+          <dt>Handle speed</dt><dd id="handle">–</dd>
+          <dt>Handle tension</dt><dd id="tension">–</dd>
+          <dt>Tip / handle gain</dt><dd id="gain">–</dd>
+        </dl>
+      </section>
+
+      <section class="card">
+        <h2>Motion program</h2>
+        <div class="seg" id="profiles" role="radiogroup" aria-label="Motion program"></div>
+        <p class="note" id="profiledesc"></p>
+        <div class="phase">
+          <div class="phase-track" id="phasetrack"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Drives</h2>
+        <table class="joints">
+          <thead><tr><th>Axis</th><th>Angle</th><th>Speed</th><th>Torque</th></tr></thead>
+          <tbody id="joints"></tbody>
+        </table>
+      </section>
+
+      <section class="card">
+        <h2>Setup</h2>
+        <div class="ctl">
+          <div class="row"><label for="speed">Swing tempo</label><output id="speedOut"></output></div>
+          <input type="range" id="speed" min="0.6" max="1.6" step="0.05" value="1">
+        </div>
+        <div class="ctl">
+          <div class="row"><label for="torque">Motor stall torque</label><output id="torqueOut"></output></div>
+          <input type="range" id="torque" min="0.4" max="1.6" step="0.05" value="1">
+        </div>
+        <div class="ctl">
+          <div class="row"><label for="length">Whip length</label><output id="lengthOut"></output></div>
+          <input type="range" id="length" min="1.2" max="3.2" step="0.1" value="2.2">
+        </div>
+        <div class="ctl">
+          <div class="row"><label for="tipd">Tip diameter (taper)</label><output id="tipdOut"></output></div>
+          <input type="range" id="tipd" min="1" max="8" step="0.5" value="1.5">
+        </div>
+        <div class="ctl">
+          <div class="row"><label for="drag">Air drag</label><output id="dragOut"></output></div>
+          <input type="range" id="drag" min="0" max="2" step="0.1" value="1">
+        </div>
+        <p class="note">Tempo, length and taper restart the run. Torque and drag apply immediately.</p>
+      </section>
+    </div>
+  </div>
+
+  <footer>
+    <p>Model: planar three-joint arm, each joint a torque-limited motor with a linear torque/speed curve tracking minimum-jerk keyframes; the whip pulls back on the joints. The whip is 56 lumped masses with inextensible links, bending stiffness EI ∝ d⁴, quadratic air drag and a floor, integrated at 20 kHz with extra substeps near the crack. The taper does the work: the travelling loop moves into ever lighter material and speeds up.</p>
+    <p>Speed of sound taken as 343 m/s (20 °C, sea level).</p>
+  </footer>
+</div>
+
+<script src="sim.js"></script>
+<script>
+(() => {
+  'use strict';
+  const { WhipSim: Sim, PROFILES, DEFAULTS, SPEED_OF_SOUND } = window.WhipSim;
+  const $ = (id) => document.getElementById(id);
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const ui = {
+    profile: 'overhead', speed: 1, torque: 1, whipLength: 2.2, tipDiameter: 1.5, drag: 1,
+    timeScale: 0.25, playing: true, sound: false,
+  };
+
+  let sim, trail, history, rings, flash, seenCracks, bucket, carry;
+
+  function build() {
+    sim = new Sim({
+      profile: ui.profile,
+      speed: ui.speed,
+      whipLength: ui.whipLength,
+      tipDiameter: ui.tipDiameter / 1000,
+      dragScale: ui.drag,
+      tauMax: DEFAULTS.tauMax.map((t) => t * ui.torque),
+    });
+    trail = [];
+    history = [];
+    rings = [];
+    flash = 0;
+    seenCracks = 0;
+    bucket = { t: 0, v: 0 };
+    carry = 0;
+    buildPhaseTrack();
+  }
+
+  // ------------------------------------------------------------ stepping
+  const SAMPLE = 0.002; // strip-chart resolution (s of sim time)
+  const HISTORY = 4; // seconds shown in the chart
+
+  function stepOnce() {
+    sim.step();
+    const N = sim.N;
+    trail.push(sim.x[2 * (N - 1)], sim.x[2 * (N - 1) + 1], sim.tipSpeed);
+    if (trail.length > 3 * 500) trail.splice(0, trail.length - 3 * 500);
+    if (sim.tipSpeed > bucket.v) bucket.v = sim.tipSpeed;
+    if (sim.t - bucket.t >= SAMPLE) {
+      history.push(sim.t, bucket.v);
+      bucket = { t: sim.t, v: 0 };
+      while (history.length && history[0] < sim.t - HISTORY) history.splice(0, 2);
+    }
+    if (sim.cracks.length > seenCracks) {
+      const c = sim.cracks[sim.cracks.length - 1];
+      seenCracks = sim.cracks.length;
+      rings.push(c);
+      flash = 1;
+      playCrack(c.speed / SPEED_OF_SOUND);
+    }
+  }
+
+  let lastFrame = performance.now(), loadFactor = 1;
+  function frame(now) {
+    const dtReal = Math.min(0.05, (now - lastFrame) / 1000);
+    lastFrame = now;
+    if (ui.playing) {
+      const want = dtReal * ui.timeScale / sim.params.dt + carry;
+      const steps = Math.floor(want);
+      carry = want - steps;
+      const t0 = performance.now();
+      let n = 0;
+      for (; n < steps; n++) {
+        stepOnce();
+        if ((n & 31) === 31 && performance.now() - t0 > 22) { n++; carry = 0; break; }
+      }
+      loadFactor = steps ? n / steps : 1;
+    }
+    flash = Math.max(0, flash - dtReal * 2.5);
+    rings = rings.filter((r) => (sim.t - r.t) * SPEED_OF_SOUND < 6);
+    draw();
+    updatePanel();
+    requestAnimationFrame(frame);
+  }
+
+  // ------------------------------------------------------------ drawing
+  const stage = $('stage'), sctx = stage.getContext('2d');
+  const chart = $('chart'), cctx = chart.getContext('2d');
+  let colors = {};
+  function readColors() {
+    const cs = getComputedStyle(document.documentElement);
+    for (const k of ['panel', 'ink', 'muted', 'line', 'grid', 'accent', 'accent-soft', 'mach', 'mach-soft', 'whip', 'steel', 'ok']) {
+      colors[k] = cs.getPropertyValue('--' + k).trim();
+    }
+  }
+  readColors();
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readColors);
+  new MutationObserver(readColors).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  function fit(canvas, ctx) {
+    const r = canvas.getBoundingClientRect();
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
+    if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [r.width, r.height];
+  }
+
+  function draw() {
+    const [W, H] = fit(stage, sctx);
+    const ctx = sctx, P = sim.params, S = P.shoulder;
+    const reach = P.links[0] + P.links[1] + P.links[2] + P.whipLength;
+    // world window: centred on the shoulder, floor at the bottom
+    const xmin = S[0] - reach - 0.2, xmax = S[0] + reach + 0.2;
+    const ymin = -0.25, ymax = S[1] + 0.7 * reach; // the whip rarely climbs higher
+    const k = Math.min(W / (xmax - xmin), H / (ymax - ymin));
+    const ox = W / 2 - ((xmin + xmax) / 2) * k;
+    const oy = H - 8 + ymin * k;
+    const X = (x) => ox + x * k, Y = (y) => oy - y * k;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = colors.panel;
+    ctx.fillRect(0, 0, W, H);
+
+    // metre grid
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = colors.grid;
+    ctx.beginPath();
+    for (let gx = Math.ceil(xmin * 2) / 2; gx <= xmax; gx += 0.5) { ctx.moveTo(X(gx), Y(0)); ctx.lineTo(X(gx), Y(ymax)); }
+    for (let gy = 0.5; gy <= ymax; gy += 0.5) { ctx.moveTo(X(xmin), Y(gy)); ctx.lineTo(X(xmax), Y(gy)); }
+    ctx.stroke();
+
+    // floor and scale
+    ctx.strokeStyle = colors.muted;
+    ctx.beginPath(); ctx.moveTo(X(xmin), Y(0)); ctx.lineTo(X(xmax), Y(0)); ctx.stroke();
+    ctx.fillStyle = colors.muted;
+    ctx.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-data');
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let gx = Math.ceil(xmin); gx <= xmax; gx += 1) {
+      ctx.fillRect(X(gx) - 0.5, Y(0), 1, 4);
+      if (Y(0) + 16 < H) ctx.fillText(gx + ' m', X(gx), Y(0) + 5);
+    }
+
+    // shock rings from each crack (radius grows at the speed of sound in sim time)
+    for (const r of rings) {
+      const rad = (sim.t - r.t) * SPEED_OF_SOUND;
+      const a = Math.max(0, 1 - rad / 6);
+      ctx.strokeStyle = colors.mach;
+      ctx.globalAlpha = a;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(X(r.x), Y(r.y), Math.max(2, rad * k), 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+
+    // pedestal
+    ctx.fillStyle = colors.grid;
+    ctx.strokeStyle = colors.steel;
+    ctx.lineWidth = 1.5;
+    const pw = 0.22 * k;
+    ctx.beginPath();
+    ctx.moveTo(X(S[0]) - pw * 0.35, Y(S[1]));
+    ctx.lineTo(X(S[0]) + pw * 0.35, Y(S[1]));
+    ctx.lineTo(X(S[0]) + pw, Y(0));
+    ctx.lineTo(X(S[0]) - pw, Y(0));
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+
+    // commanded pose (ghost)
+    const tq = sim.target.q;
+    const ghost = [S];
+    let ang = 0;
+    for (let j = 0; j < 3; j++) {
+      ang += tq[j];
+      const p = ghost[j];
+      ghost.push([p[0] + P.links[j] * Math.cos(ang), p[1] + P.links[j] * Math.sin(ang)]);
+    }
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = colors.accent;
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ghost.forEach((p, i) => (i ? ctx.lineTo(X(p[0]), Y(p[1])) : ctx.moveTo(X(p[0]), Y(p[1]))));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+
+    // whip: tapered strokes, drawn butt to tip
+    const N = sim.N, x = sim.x;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = colors.whip;
+    for (let i = 1; i < N - 1; i++) {
+      const d = i < 2 ? P.buttDiameter : sim.diam[i];
+      ctx.lineWidth = Math.max(1, d * k * 0.9 + 0.6);
+      ctx.beginPath();
+      ctx.moveTo(X(x[2 * i]), Y(x[2 * i + 1]));
+      ctx.lineTo(X(x[2 * i + 2]), Y(x[2 * i + 3]));
+      ctx.stroke();
+    }
+
+    // tip trail coloured by speed
+    ctx.lineWidth = 2;
+    for (let i = 3; i < trail.length; i += 3) {
+      const v = trail[i + 2];
+      ctx.strokeStyle = v > SPEED_OF_SOUND ? colors.mach : colors.accent;
+      ctx.globalAlpha = (i / trail.length) * Math.min(1, v / 150);
+      ctx.beginPath();
+      ctx.moveTo(X(trail[i - 3]), Y(trail[i - 2]));
+      ctx.lineTo(X(trail[i]), Y(trail[i + 1]));
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+
+    // arm links and handle
+    const J = sim.joints;
+    const widths = [0.075, 0.06, 0.035];
+    for (let j = 0; j < 3; j++) {
+      ctx.strokeStyle = j === 2 ? colors.whip : colors.steel;
+      ctx.lineWidth = widths[j] * k;
+      ctx.beginPath(); ctx.moveTo(X(J[j][0]), Y(J[j][1])); ctx.lineTo(X(J[j + 1][0]), Y(J[j + 1][1])); ctx.stroke();
+    }
+
+    // motors with torque arcs
+    const radii = [0.09, 0.075, 0.055];
+    for (let j = 0; j < 3; j++) {
+      const cx = X(J[j][0]), cy = Y(J[j][1]), r = radii[j] * k;
+      ctx.fillStyle = colors.panel;
+      ctx.strokeStyle = colors.ink;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      const frac = sim.tau[j] / P.tauMax[j];
+      const sat = Math.abs(frac) > 0.98;
+      ctx.strokeStyle = sat ? colors.mach : colors.accent;
+      ctx.lineWidth = Math.max(2, r * 0.35);
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + ctx.lineWidth * 0.9, -Math.PI / 2, -Math.PI / 2 - frac * Math.PI * 1.8, frac > 0);
+      ctx.stroke();
+      ctx.fillStyle = colors.ink;
+      ctx.beginPath(); ctx.arc(cx, cy, Math.max(1.5, r * 0.25), 0, Math.PI * 2); ctx.fill();
+    }
+
+    // crack flash
+    if (flash > 0 && !reduceMotion && rings.length) {
+      const r = rings[rings.length - 1];
+      ctx.fillStyle = colors.mach;
+      ctx.globalAlpha = flash;
+      ctx.font = '700 ' + Math.round(18 + 10 * flash) + 'px ' + getComputedStyle(document.body).getPropertyValue('--font-display');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('CRACK  Mach ' + (r.speed / SPEED_OF_SOUND).toFixed(2), Math.min(W - 90, Math.max(90, X(r.x))), Math.max(28, Y(r.y) - 14));
+      ctx.globalAlpha = 1;
+    }
+
+    drawChart();
+  }
+
+  function drawChart() {
+    const [W, H] = fit(chart, cctx);
+    const ctx = cctx;
+    const padL = 40, padR = 10, padT = 10, padB = 20;
+    const vmax = 600;
+    const t1 = Math.max(sim.t, HISTORY), t0 = t1 - HISTORY;
+    const X = (t) => padL + ((t - t0) / HISTORY) * (W - padL - padR);
+    const Y = (v) => padT + (1 - Math.min(v, vmax) / vmax) * (H - padT - padB);
+    const font = getComputedStyle(document.body).getPropertyValue('--font-data');
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = colors.panel;
+    ctx.fillRect(0, 0, W, H);
+    ctx.font = '10px ' + font;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    ctx.lineWidth = 1;
+    for (const v of [0, 200, 400, 600]) {
+      ctx.strokeStyle = colors.grid;
+      ctx.beginPath(); ctx.moveTo(padL, Y(v)); ctx.lineTo(W - padR, Y(v)); ctx.stroke();
+      ctx.fillStyle = colors.muted;
+      ctx.fillText(String(v), padL - 6, Y(v));
+    }
+    ctx.textAlign = 'left';
+    ctx.fillText('tip speed, m/s', padL + 6, padT + 8);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    for (let s = Math.ceil(t0); s <= t1; s++) ctx.fillText(s + ' s', X(s), H - padB + 5);
+
+    // Mach 1 line
+    ctx.strokeStyle = colors.mach;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.moveTo(padL, Y(SPEED_OF_SOUND)); ctx.lineTo(W - padR, Y(SPEED_OF_SOUND)); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = colors.mach;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Mach 1', W - padR - 2, Y(SPEED_OF_SOUND) - 2);
+
+    if (history.length < 4) return;
+    // area + line
+    ctx.beginPath();
+    ctx.moveTo(X(history[0]), Y(0));
+    for (let i = 0; i < history.length; i += 2) ctx.lineTo(X(history[i]), Y(history[i + 1]));
+    ctx.lineTo(X(history[history.length - 2]), Y(0));
+    ctx.closePath();
+    ctx.fillStyle = colors['accent-soft'];
+    ctx.fill();
+    ctx.beginPath();
+    for (let i = 0; i < history.length; i += 2) {
+      const px = X(history[i]), py = Y(history[i + 1]);
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.strokeStyle = colors.accent;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // crack markers
+    ctx.fillStyle = colors.mach;
+    for (const c of sim.cracks) {
+      if (c.t < t0) continue;
+      ctx.beginPath(); ctx.arc(X(c.t), Y(c.speed), 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+    // endpoint
+    const lt = history[history.length - 2], lv = history[history.length - 1];
+    ctx.fillStyle = colors.accent;
+    ctx.beginPath(); ctx.arc(X(lt), Y(lv), 3, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // ------------------------------------------------------------ panel
+  const AXES = ['Shoulder', 'Elbow', 'Wrist'];
+  const jointRows = AXES.map((name) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${name}</td><td></td><td></td><td><span></span><span class="tbar"><i></i></span></td>`;
+    $('joints').appendChild(tr);
+    return { angle: tr.children[1], speed: tr.children[2], torque: tr.children[3].firstChild, bar: tr.querySelector('.tbar i') };
+  });
+
+  function buildPhaseTrack() {
+    const p = PROFILES[ui.profile];
+    const track = $('phasetrack');
+    track.innerHTML = '';
+    const total = p.keys[p.keys.length - 1].t;
+    p.phases.forEach((label, i) => {
+      const s = document.createElement('span');
+      s.style.setProperty('--w', ((p.keys[i + 1].t - p.keys[i].t) / total).toFixed(4));
+      s.textContent = label;
+      s.title = label;
+      track.appendChild(s);
+    });
+    const head = document.createElement('i');
+    head.className = 'head';
+    track.appendChild(head);
+    $('profiledesc').textContent = p.description;
+  }
+
+  const fmt = (v, d = 0) => v.toFixed(d);
+  let panelTick = 0;
+  function updatePanel() {
+    if (++panelTick % 3) return;
+    const v = sim.tipSpeed, m = v / SPEED_OF_SOUND;
+    $('tip').firstChild.nodeValue = fmt(v);
+    $('mach').textContent = 'Mach ' + m.toFixed(2);
+    $('mach').classList.toggle('super', m >= 1);
+    const fill = $('machfill');
+    fill.style.width = Math.min(100, (m / 2) * 100) + '%';
+    fill.classList.toggle('super', m >= 1);
+    $('cyclepeak').textContent = fmt(sim.cyclePeak) + ' m/s';
+    $('peak').textContent = fmt(sim.peakTipSpeed) + ' m/s · M ' + (sim.peakTipSpeed / SPEED_OF_SOUND).toFixed(2);
+    $('cracks').textContent = sim.cracks.length;
+    const hs = sim.handleSpeed();
+    $('handle').textContent = fmt(hs, 1) + ' m/s';
+    $('tension').textContent = fmt(Math.max(0, sim.tension)) + ' N';
+    $('gain').textContent = hs > 1 ? '×' + fmt(v / hs, 1) : '–';
+
+    for (let j = 0; j < 3; j++) {
+      const r = jointRows[j];
+      r.angle.textContent = fmt(sim.q[j] * 180 / Math.PI) + '°';
+      r.speed.textContent = fmt(sim.qd[j], 1) + ' rad/s';
+      r.torque.textContent = fmt(sim.tau[j]) + ' N·m';
+      const frac = Math.abs(sim.tau[j]) / sim.params.tauMax[j];
+      r.bar.style.width = Math.min(100, frac * 100) + '%';
+      r.bar.classList.toggle('sat', frac > 0.98);
+    }
+
+    const tgt = sim.target;
+    const spans = $('phasetrack').querySelectorAll('span');
+    spans.forEach((s, i) => s.classList.toggle('on', i === tgt.segment));
+    $('phasetrack').querySelector('.head').style.left = (tgt.phase * 100).toFixed(2) + '%';
+
+    const st = $('status');
+    const phaseName = PROFILES[ui.profile].phases[tgt.segment];
+    if (m >= 1 || flash > 0.2) { st.dataset.state = 'super'; st.textContent = 'Supersonic'; }
+    else if (ui.playing) { st.dataset.state = 'sub'; st.textContent = phaseName; }
+    else { st.dataset.state = 'idle'; st.textContent = 'Paused'; }
+
+    $('overlay').textContent =
+      `t = ${sim.t.toFixed(3)} s · ${ui.timeScale === 1 ? 'real time' : ui.timeScale + '× speed'}` +
+      (loadFactor < 0.95 && ui.playing ? ` · CPU-limited (${Math.round(loadFactor * 100)}%)` : '');
+  }
+
+  // ------------------------------------------------------------ sound
+  let actx = null;
+  function playCrack(mach) {
+    if (!ui.sound || !actx) return;
+    const sr = actx.sampleRate, len = Math.round(sr * 0.25);
+    const buf = actx.createBuffer(1, len, sr);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const t = i / sr;
+      d[i] = (Math.random() * 2 - 1) * (Math.exp(-t / 0.006) + 0.15 * Math.exp(-t / 0.05));
+    }
+    const src = actx.createBufferSource();
+    src.buffer = buf;
+    const hp = actx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 600;
+    const g = actx.createGain();
+    g.gain.value = Math.min(1, 0.4 + 0.4 * (mach - 1));
+    src.connect(hp).connect(g).connect(actx.destination);
+    src.start();
+  }
+
+  // ------------------------------------------------------------ controls
+  const profileSeg = $('profiles');
+  for (const [key, p] of Object.entries(PROFILES)) {
+    const id = 'p-' + key;
+    profileSeg.insertAdjacentHTML('beforeend',
+      `<input type="radio" name="profile" id="${id}" value="${key}"${key === ui.profile ? ' checked' : ''}><label for="${id}">${p.name}</label>`);
+  }
+  profileSeg.addEventListener('change', (e) => { ui.profile = e.target.value; build(); });
+
+  $('timescale').addEventListener('change', (e) => { ui.timeScale = parseFloat(e.target.value); });
+  $('play').addEventListener('click', () => {
+    ui.playing = !ui.playing;
+    $('play').textContent = ui.playing ? 'Pause' : 'Play';
+  });
+  $('reset').addEventListener('click', build);
+  $('sound').addEventListener('click', () => {
+    ui.sound = !ui.sound;
+    if (ui.sound && !actx) {
+      try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (err) { ui.sound = false; }
+    }
+    if (actx && actx.state === 'suspended') actx.resume();
+    $('sound').textContent = ui.sound ? 'Sound on' : 'Sound off';
+    $('sound').setAttribute('aria-pressed', String(ui.sound));
+  });
+
+  const sliders = [
+    { id: 'speed', key: 'speed', fmt: (v) => '×' + v.toFixed(2), rebuild: true },
+    { id: 'torque', key: 'torque', fmt: (v) => DEFAULTS.tauMax.map((t) => Math.round(t * v)).join(' / ') + ' N·m',
+      live: (v) => sim.setParams({ tauMax: DEFAULTS.tauMax.map((t) => t * v) }) },
+    { id: 'length', key: 'whipLength', fmt: (v) => v.toFixed(1) + ' m', rebuild: true },
+    { id: 'tipd', key: 'tipDiameter', fmt: (v) => v.toFixed(1) + ' mm (butt 16 mm)', rebuild: true },
+    { id: 'drag', key: 'drag', fmt: (v) => (v === 0 ? 'off (vacuum)' : '×' + v.toFixed(1)),
+      live: (v) => sim.setParams({ dragScale: v }) },
+  ];
+  for (const s of sliders) {
+    const el = $(s.id), out = $(s.id + 'Out');
+    const show = () => { out.textContent = s.fmt(parseFloat(el.value)); };
+    show();
+    el.addEventListener('input', () => {
+      ui[s.key] = parseFloat(el.value);
+      show();
+      if (s.live) s.live(ui[s.key]);
+    });
+    if (s.rebuild) el.addEventListener('change', build);
+  }
+
+  // ------------------------------------------------------------ start
+  build();
+  // open on the wind-up, with the whip thrown back over the rig
+  for (let i = 0, n = Math.round(1.2 / sim.params.dt); i < n; i++) stepOnce();
+  requestAnimationFrame((t) => { lastFrame = t; frame(t); });
+})();
+</script>
+</body>
+</html>
