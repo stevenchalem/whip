@@ -20,6 +20,7 @@
     --mach: #c94a0c;
     --mach-soft: #f8dfcf;
     --ok: #2f7d4f;
+    --ok-soft: #d8eee0;
     --whip: #3b2b20;
     --steel: #6d7d87;
     --font-display: "Barlow Condensed", "Arial Narrow", "Roboto Condensed", sans-serif;
@@ -30,13 +31,13 @@
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
       --bg: #11171b; --panel: #172026; --ink: #dbe4ea; --muted: #8c9ca6; --line: #2a3740; --grid: #1f2a31;
-      --accent: #6fa6ff; --accent-soft: #1d2f4a; --mach: #ff8b45; --mach-soft: #3d2416; --ok: #5fcf8e;
+      --accent: #6fa6ff; --accent-soft: #1d2f4a; --mach: #ff8b45; --mach-soft: #3d2416; --ok: #5fcf8e; --ok-soft: #173326;
       --whip: #d9c2a8; --steel: #93a4ae; color-scheme: dark;
     }
   }
   :root[data-theme="dark"] {
     --bg: #11171b; --panel: #172026; --ink: #dbe4ea; --muted: #8c9ca6; --line: #2a3740; --grid: #1f2a31;
-    --accent: #6fa6ff; --accent-soft: #1d2f4a; --mach: #ff8b45; --mach-soft: #3d2416; --ok: #5fcf8e;
+    --accent: #6fa6ff; --accent-soft: #1d2f4a; --mach: #ff8b45; --mach-soft: #3d2416; --ok: #5fcf8e; --ok-soft: #173326;
     --whip: #d9c2a8; --steel: #93a4ae; color-scheme: dark;
   }
 
@@ -74,6 +75,7 @@
     white-space: nowrap;
   }
   .status[data-state="sub"] { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+  .status[data-state="hit"] { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); }
   .status[data-state="super"] { color: var(--mach); border-color: var(--mach); background: var(--mach-soft); }
 
   .bench { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 14px; align-items: start; }
@@ -171,10 +173,26 @@
 
   .ctl { display: grid; gap: 4px; }
   .ctl .row { display: flex; justify-content: space-between; gap: 8px; }
-  .ctl label { color: var(--muted); }
+  .ctl label, .ctl .label-text { color: var(--muted); }
   .ctl output { font: 500 0.86rem/1.3 var(--font-data); font-variant-numeric: tabular-nums; }
   input[type="range"] { width: 100%; accent-color: var(--accent); }
   .note { margin: 0; color: var(--muted); font-size: 0.8rem; }
+
+  .result { display: grid; gap: 2px; padding: 10px 12px; border-radius: var(--r); border: 1px solid var(--line); background: var(--bg); }
+  .result strong { font: 700 1.25rem/1.1 var(--font-display); letter-spacing: 0.04em; text-transform: uppercase; }
+  .result span { color: var(--muted); font: 500 0.84rem/1.35 var(--font-data); font-variant-numeric: tabular-nums; }
+  .result[data-state="hit"] { border-color: var(--ok); background: var(--ok-soft); }
+  .result[data-state="hit"] strong { color: var(--ok); }
+  .result[data-state="miss"] { border-color: var(--mach); background: var(--mach-soft); }
+  .result[data-state="miss"] strong { color: var(--mach); }
+  .ctl .seg label { padding: 6px 10px; font-size: 0.8rem; }
+  .progress { height: 6px; border-radius: 3px; background: var(--grid); overflow: hidden; }
+  .progress i { display: block; height: 100%; width: 0; background: var(--accent); }
+  table.trials { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  table.trials th { text-align: left; font: 600 0.7rem/1 var(--font-body); letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; }
+  table.trials td { padding: 4px 0; font: 500 0.86rem/1.2 var(--font-data); border-top: 1px solid var(--grid); }
+  table.trials td:first-child { font-family: var(--font-body); }
+  table.trials th:not(:first-child), table.trials td:not(:first-child) { text-align: right; }
 
   footer { color: var(--muted); font-size: 0.82rem; max-width: 90ch; }
   footer p { margin: 0 0 6px; }
@@ -184,7 +202,7 @@
 <div class="wrap">
   <header>
     <h1>Whip Rig</h1>
-    <p>A three-axis motor arm cracks a 2.2 m tapered whip. The crack is the tip passing the speed of sound.</p>
+    <p>A three-axis motor arm swings a 2.2 m tapered whip, either to crack it (tip past the speed of sound) or to strike a hanging card.</p>
     <span class="status" id="status" data-state="idle">Holding</span>
   </header>
 
@@ -223,6 +241,36 @@
           <dt>Handle tension</dt><dd id="tension">–</dd>
           <dt>Tip / handle gain</dt><dd id="gain">–</dd>
         </dl>
+      </section>
+
+      <section class="card" id="targetcard" hidden>
+        <h2>Card target</h2>
+        <div class="result" id="result" data-state="wait" aria-live="polite"><strong id="resultHead">Waiting for the strike</strong><span id="resultSub">&nbsp;</span></div>
+        <dl class="kv">
+          <dt>Hits this run</dt><dd id="hits">0 of 0</dd>
+          <dt>Card centre</dt><dd id="cardpos">–</dd>
+        </dl>
+        <div class="ctl">
+          <div class="row"><label for="cardh">Card height</label><output id="cardhOut"></output></div>
+          <input type="range" id="cardh" min="0.5" max="2" step="0.05" value="1.2">
+        </div>
+        <div class="ctl">
+          <div class="row"><span class="label-text">Start the strike</span></div>
+          <div class="seg" id="trigger" role="radiogroup" aria-label="Strike trigger">
+            <input type="radio" name="trigger" id="tr-ext" value="extended" checked><label for="tr-ext">When the whip has unrolled</label>
+            <input type="radio" name="trigger" id="tr-timed" value="timed"><label for="tr-timed">On a fixed clock</label>
+          </div>
+        </div>
+        <button id="trialBtn" type="button">Test 20 disturbed swings per trigger</button>
+        <div id="trialOut" hidden>
+          <div class="progress"><i id="trialBar"></i></div>
+          <table class="trials" id="trialTable" hidden>
+            <thead><tr><th>Trigger</th><th>Hits</th><th>Typical miss</th><th>Impact</th></tr></thead>
+            <tbody></tbody>
+          </table>
+          <p class="note" id="trialNote"></p>
+        </div>
+        <p class="note">Each test swing varies air drag ±15%, motor torque ±7.5% and the whip's starting motion. The aim table assumes the default whip, tempo and drag.</p>
       </section>
 
       <section class="card">
@@ -271,6 +319,7 @@
 
   <footer>
     <p>Model: planar three-joint arm, each joint a torque-limited motor with a linear torque/speed curve tracking minimum-jerk keyframes; the whip pulls back on the joints. The whip is 56 lumped masses with inextensible links, bending stiffness EI ∝ d⁴, quadratic air drag and a floor, integrated at 20 kHz with extra substeps near the crack. The taper does the work: the travelling loop moves into ever lighter material and speeds up.</p>
+    <p>Aimed strike: the card (88 mm, 1.8 g) hangs edge-on on a 30 cm string, 2.6 m in front of the shoulder axis. Strike end pose, strike duration and wind-up angle were optimised offline for card heights from 0.5 to 2 m (tools/aim.js) and are interpolated in between. A hit is the tip or the last two whip nodes sweeping through the card within 4 mm; the card does not push back on the whip.</p>
     <p>Speed of sound taken as 343 m/s (20 °C, sea level).</p>
   </footer>
 </div>
@@ -279,20 +328,25 @@
 <script>
 (() => {
   'use strict';
-  const { WhipSim: Sim, PROFILES, DEFAULTS, SPEED_OF_SOUND } = window.WhipSim;
+  const { WhipSim: Sim, PROFILES, DEFAULTS, SPEED_OF_SOUND, makeStrikeProfile, aimFor, strikeTrial } = window.WhipSim;
+  const AIM_TABLE = window.WhipSim.AIM_TABLE();
   const $ = (id) => document.getElementById(id);
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const ui = {
-    profile: 'overhead', speed: 1, torque: 1, whipLength: 2.2, tipDiameter: 1.5, drag: 1,
+    profile: 'aimed', cardHeight: 1.2, trigger: 'extended', speed: 1, torque: 1, whipLength: 2.2, tipDiameter: 1.5, drag: 1,
     timeScale: 0.25, playing: true, sound: false,
   };
 
-  let sim, trail, history, rings, flash, seenCracks, bucket, carry;
+  let sim, trail, history, rings, flash, seenCracks, bucket, carry, hitFlash, hitSeen;
+  const aimed = () => ui.profile === 'aimed';
+  const programs = { aimed: { name: 'Aimed strike' }, ...PROFILES };
 
   function build() {
     sim = new Sim({
-      profile: ui.profile,
+      profile: aimed() ? makeStrikeProfile(aimFor(ui.cardHeight)) : ui.profile,
+      target: aimed() ? { x: AIM_TABLE.x, y: ui.cardHeight } : null,
+      trigger: ui.trigger,
       speed: ui.speed,
       whipLength: ui.whipLength,
       tipDiameter: ui.tipDiameter / 1000,
@@ -306,6 +360,9 @@
     seenCracks = 0;
     bucket = { t: 0, v: 0 };
     carry = 0;
+    hitFlash = 0;
+    hitSeen = null;
+    $('targetcard').hidden = !aimed();
     buildPhaseTrack();
   }
 
@@ -323,6 +380,10 @@
       history.push(sim.t, bucket.v);
       bucket = { t: sim.t, v: 0 };
       while (history.length && history[0] < sim.t - HISTORY) history.splice(0, 2);
+    }
+    if (sim.attempt.hit && hitSeen !== sim.attempt) {
+      hitSeen = sim.attempt;
+      hitFlash = 1;
     }
     if (sim.cracks.length > seenCracks) {
       const c = sim.cracks[sim.cracks.length - 1];
@@ -350,6 +411,7 @@
       loadFactor = steps ? n / steps : 1;
     }
     flash = Math.max(0, flash - dtReal * 2.5);
+    hitFlash = Math.max(0, hitFlash - dtReal * 1.5);
     rings = rings.filter((r) => (sim.t - r.t) * SPEED_OF_SOUND < 6);
     draw();
     updatePanel();
@@ -424,6 +486,34 @@
       ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(X(r.x), Y(r.y), Math.max(2, rad * k), 0, Math.PI * 2); ctx.stroke();
       ctx.globalAlpha = 1;
+    }
+
+    // hanging card
+    if (sim.params.target) {
+      const g = sim.cardGeometry();
+      const shown = shownAttempt();
+      ctx.strokeStyle = colors.muted;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(X(g.hang[0]) - 10, Y(g.hang[1])); ctx.lineTo(X(g.hang[0]) + 10, Y(g.hang[1]));
+      ctx.moveTo(X(g.hang[0]), Y(g.hang[1])); ctx.lineTo(X(g.top[0]), Y(g.top[1]));
+      ctx.stroke();
+      ctx.strokeStyle = sim.attempt.hit ? colors.ok : colors.ink;
+      ctx.lineWidth = Math.max(4, 0.012 * k);
+      ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.moveTo(X(g.top[0]), Y(g.top[1])); ctx.lineTo(X(g.bottom[0]), Y(g.bottom[1])); ctx.stroke();
+      ctx.fillStyle = colors.muted;
+      ctx.font = '10px ' + getComputedStyle(document.body).getPropertyValue('--font-data');
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(sim.params.target.y.toFixed(2) + ' m', X(g.bottom[0]) + 8, Y((g.top[1] + g.bottom[1]) / 2));
+      // where the tip passed closest on a miss
+      if (shown && !shown.hit && Number.isFinite(shown.miss) && shown.done) {
+        const mx = X(shown.x), my = Y(shown.y);
+        ctx.strokeStyle = colors.mach;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(mx - 5, my - 5); ctx.lineTo(mx + 5, my + 5); ctx.moveTo(mx + 5, my - 5); ctx.lineTo(mx - 5, my + 5); ctx.stroke();
+      }
     }
 
     // pedestal
@@ -523,6 +613,17 @@
       ctx.globalAlpha = 1;
     }
 
+    if (hitFlash > 0 && !reduceMotion && sim.attempt.hit) {
+      const a = sim.attempt;
+      ctx.fillStyle = colors.ok;
+      ctx.globalAlpha = Math.min(1, hitFlash * 1.5);
+      ctx.font = '700 22px ' + getComputedStyle(document.body).getPropertyValue('--font-display');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText('HIT  ' + a.speed.toFixed(0) + ' m/s', Math.min(W - 70, X(a.x)), Y(a.y) - 18);
+      ctx.globalAlpha = 1;
+    }
+
     drawChart();
   }
 
@@ -605,7 +706,7 @@
   });
 
   function buildPhaseTrack() {
-    const p = PROFILES[ui.profile];
+    const p = sim.profile;
     const track = $('phasetrack');
     track.innerHTML = '';
     const total = p.keys[p.keys.length - 1].t;
@@ -651,20 +752,102 @@
       r.bar.classList.toggle('sat', frac > 0.98);
     }
 
+    if (aimed()) updateTargetPanel();
+
     const tgt = sim.target;
     const spans = $('phasetrack').querySelectorAll('span');
     spans.forEach((s, i) => s.classList.toggle('on', i === tgt.segment));
     $('phasetrack').querySelector('.head').style.left = (tgt.phase * 100).toFixed(2) + '%';
 
     const st = $('status');
-    const phaseName = PROFILES[ui.profile].phases[tgt.segment];
-    if (m >= 1 || flash > 0.2) { st.dataset.state = 'super'; st.textContent = 'Supersonic'; }
+    const phaseName = sim.profile.phases[tgt.segment];
+    if (aimed() && hitFlash > 0.2) { st.dataset.state = 'hit'; st.textContent = 'Hit'; }
+    else if (m >= 1 || flash > 0.2) { st.dataset.state = 'super'; st.textContent = 'Supersonic'; }
     else if (ui.playing) { st.dataset.state = 'sub'; st.textContent = phaseName; }
     else { st.dataset.state = 'idle'; st.textContent = 'Paused'; }
 
     $('overlay').textContent =
       `t = ${sim.t.toFixed(3)} s · ${ui.timeScale === 1 ? 'real time' : ui.timeScale + '× speed'}` +
       (loadFactor < 0.95 && ui.playing ? ` · CPU-limited (${Math.round(loadFactor * 100)}%)` : '');
+  }
+
+  // The attempt worth showing: the current one once it has resolved, else the last finished one.
+  function shownAttempt() {
+    const a = sim.attempt;
+    const over = sim.segment >= sim.strikeKey + 2; // into the return move
+    if (a.hit || over) return Object.assign(a, { done: true });
+    return sim.attempts.length ? Object.assign(sim.attempts[sim.attempts.length - 1], { done: true }) : null;
+  }
+
+  function describeMiss(a) {
+    const vert = Math.abs(a.dy) > 0.044 ? (a.dy > 0 ? 'above' : 'below') : '';
+    const horiz = Math.abs(a.dx) > 0.02 ? (a.dx < 0 ? 'short' : 'past') : '';
+    return [vert, horiz].filter(Boolean).join(', ') || 'beside';
+  }
+
+  function updateTargetPanel() {
+    const a = shownAttempt();
+    const box = $('result');
+    if (!a) {
+      box.dataset.state = 'wait';
+      $('resultHead').textContent = 'Waiting for the strike';
+      $('resultSub').textContent = sim.segment >= sim.strikeKey ? 'Striking…' : 'Winding up';
+    } else if (a.hit) {
+      box.dataset.state = 'hit';
+      $('resultHead').textContent = 'Hit at ' + a.speed.toFixed(0) + ' m/s';
+      $('resultSub').textContent = `${(a.dy * 100).toFixed(0)} cm from card centre · ${a.energy.toFixed(2)} J in the tip node`;
+    } else {
+      box.dataset.state = 'miss';
+      $('resultHead').textContent = 'Missed by ' + (a.miss * 100).toFixed(0) + ' cm';
+      $('resultSub').textContent = 'Tip passed ' + describeMiss(a);
+    }
+    const done = sim.attempts.concat(sim.attempt.hit || sim.segment >= sim.strikeKey + 2 ? [sim.attempt] : []);
+    $('hits').textContent = `${done.filter((x) => x.hit).length} of ${done.length}`;
+    $('cardpos').textContent = `${AIM_TABLE.x.toFixed(2)} m out, ${ui.cardHeight.toFixed(2)} m up`;
+  }
+
+  // ------------------------------------------------------------ trials
+  let trialRun = 0;
+  function runTrials() {
+    const run = ++trialRun;
+    const height = ui.cardHeight, aim = aimFor(height), n = 20;
+    const modes = [['extended', 'When unrolled'], ['timed', 'Fixed clock']];
+    const base = new Sim({ profile: makeStrikeProfile(aim), target: { x: AIM_TABLE.x, y: height } });
+    const jobs = [];
+    for (const [mode] of modes) for (let i = 0; i < n; i++) jobs.push({ mode, seed: 101 + i });
+    const results = { extended: [], timed: [] };
+    let j = 0, gen = null;
+    $('trialOut').hidden = false;
+    $('trialTable').hidden = true;
+    $('trialBtn').disabled = true;
+    $('trialNote').textContent = `Card at ${height.toFixed(2)} m. Running…`;
+    const tick = () => {
+      if (run !== trialRun) return;
+      const t0 = performance.now();
+      while (performance.now() - t0 < 12 && j < jobs.length) {
+        if (!gen) gen = strikeTrial(base, aim, height, { seed: jobs[j].seed, trigger: jobs[j].mode });
+        const r = gen.next();
+        if (r.done) { results[jobs[j].mode].push(r.value); gen = null; j++; }
+      }
+      $('trialBar').style.width = (100 * j / jobs.length).toFixed(1) + '%';
+      if (j < jobs.length) { setTimeout(tick, 0); return; }
+      const med = (xs) => { if (!xs.length) return null; const s = xs.slice().sort((a, b) => a - b); return s[Math.floor(s.length / 2)]; };
+      const body = $('trialTable').querySelector('tbody');
+      body.innerHTML = '';
+      for (const [mode, label] of modes) {
+        const rs = results[mode];
+        const hits = rs.filter((r) => r.hit);
+        const miss = med(rs.filter((r) => !r.hit).map((r) => r.miss));
+        const imp = med(hits.map((r) => r.speed));
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${label}</td><td>${hits.length}/${rs.length}</td><td>${miss == null ? '–' : (miss * 100).toFixed(0) + ' cm'}</td><td>${imp == null ? '–' : imp.toFixed(0) + ' m/s'}</td>`;
+        body.appendChild(tr);
+      }
+      $('trialTable').hidden = false;
+      $('trialNote').textContent = `Card at ${height.toFixed(2)} m. Typical miss and impact are medians.`;
+      $('trialBtn').disabled = false;
+    };
+    setTimeout(tick, 30);
   }
 
   // ------------------------------------------------------------ sound
@@ -691,7 +874,7 @@
 
   // ------------------------------------------------------------ controls
   const profileSeg = $('profiles');
-  for (const [key, p] of Object.entries(PROFILES)) {
+  for (const [key, p] of Object.entries(programs)) {
     const id = 'p-' + key;
     profileSeg.insertAdjacentHTML('beforeend',
       `<input type="radio" name="profile" id="${id}" value="${key}"${key === ui.profile ? ' checked' : ''}><label for="${id}">${p.name}</label>`);
@@ -704,6 +887,8 @@
     $('play').textContent = ui.playing ? 'Pause' : 'Play';
   });
   $('reset').addEventListener('click', build);
+  $('trigger').addEventListener('change', (e) => { ui.trigger = e.target.value; sim.setParams({ trigger: ui.trigger }); });
+  $('trialBtn').addEventListener('click', runTrials);
   $('sound').addEventListener('click', () => {
     ui.sound = !ui.sound;
     if (ui.sound && !actx) {
@@ -715,6 +900,7 @@
   });
 
   const sliders = [
+    { id: 'cardh', key: 'cardHeight', fmt: (v) => v.toFixed(2) + ' m', rebuild: true },
     { id: 'speed', key: 'speed', fmt: (v) => '×' + v.toFixed(2), rebuild: true },
     { id: 'torque', key: 'torque', fmt: (v) => DEFAULTS.tauMax.map((t) => Math.round(t * v)).join(' / ') + ' N·m',
       live: (v) => sim.setParams({ tauMax: DEFAULTS.tauMax.map((t) => t * v) }) },
@@ -738,7 +924,7 @@
   // ------------------------------------------------------------ start
   build();
   // open on the wind-up, with the whip thrown back over the rig
-  for (let i = 0, n = Math.round(1.2 / sim.params.dt); i < n; i++) stepOnce();
+  for (let i = 0, n = Math.round(0.72 / sim.params.dt); i < n; i++) stepOnce();
   requestAnimationFrame((t) => { lastFrame = t; frame(t); });
 })();
 </script>
